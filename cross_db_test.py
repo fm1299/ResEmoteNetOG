@@ -8,7 +8,7 @@ import warnings
 from urllib3.exceptions import InsecureRequestWarning
 warnings.simplefilter('ignore', InsecureRequestWarning)
 
-from approach.ResEmoteNet import ResEmoteNet
+from ResEmoteNet import ResEmoteNet
 
 
 # Set the device

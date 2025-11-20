@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torchvision.transforms as transforms
 from PIL import Image
 import numpy as np
-from approach.ResEmoteNet import ResEmoteNet
+from ResEmoteNet import ResEmoteNet
 
 
 device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")

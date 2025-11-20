@@ -5,7 +5,7 @@ from PIL import Image
 import cv2
 import numpy as np
 from hook import Hook
-from approach.ResEmoteNet import ResEmoteNet
+from ResEmoteNet import ResEmoteNet
 from retinaface import RetinaFace
 
 # Set the device
