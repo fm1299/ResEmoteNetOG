@@ -22,6 +22,62 @@ from ResEmoteNet import ResEmoteNet
 from get_dataset import Four4All
 
 
+def compute_class_weights(train_loader, num_classes=None, class_names=None):
+    """Compute class weights from the training loader.
+
+    Returns a torch.FloatTensor of size (num_classes,) with higher weights for
+    under-represented classes. Works when `labels` returned by the loader are
+    integers/tensors/numpy arrays.
+    """
+    print("\nComputing class weights from training data...")
+
+    # Infer num_classes if not provided
+    if num_classes is None:
+        if class_names is not None:
+            num_classes = len(class_names)
+        else:
+            # try to infer from dataset labels (best-effort)
+            labels_attr = getattr(train_loader.dataset, "labels", None)
+            if isinstance(labels_attr, pd.DataFrame):
+                num_classes = int(labels_attr.iloc[:, 1].nunique())
+            elif isinstance(labels_attr, (pd.Series, list, tuple, np.ndarray)):
+                num_classes = int(pd.Series(labels_attr).nunique())
+            else:
+                raise ValueError("Unable to infer num_classes; please pass it explicitly.")
+
+    class_counts = torch.zeros(int(num_classes), dtype=torch.float64)
+
+    for _, labels in tqdm(train_loader, desc="Counting classes"):
+        # labels may be a tensor, numpy array, list, or pandas Series
+        if isinstance(labels, torch.Tensor):
+            labels_np = labels.cpu().numpy()
+        elif isinstance(labels, (pd.Series, list, tuple, np.ndarray)):
+            labels_np = np.array(labels)
+        else:
+            labels_np = np.array(labels)
+
+        for l in labels_np:
+            idx = int(l)
+            if 0 <= idx < num_classes:
+                class_counts[idx] += 1
+
+    total_samples = class_counts.sum()
+    # avoid division by zero
+    eps = 1e-9
+    class_weights = total_samples / (num_classes * (class_counts + eps))
+    # normalize so that sum(weights) == num_classes (keeps similar scale)
+    class_weights = class_weights / class_weights.sum() * num_classes
+
+    print("\nClass Distribution in Training Set:")
+    print("-" * 60)
+    names = class_names if class_names is not None else [str(i) for i in range(num_classes)]
+    for i, (name, count, weight) in enumerate(zip(names, class_counts, class_weights)):
+        pct = (count / total_samples * 100) if total_samples > 0 else 0.0
+        print(f"{name:10s}: {int(count):6d} samples ({pct:5.2f}%) | Weight: {float(weight):.4f}")
+    print("-" * 60)
+
+    return class_weights.float()
+
 # ==================== Device ====================
 device = torch.device("mps" if torch.backends.mps.is_available() else
                       "cuda" if torch.cuda.is_available() else "cpu")
@@ -42,19 +98,41 @@ transform = transforms.Compose([
 
 
 # ==================== Data ====================
-train_dataset = Four4All(csv_file='rafdb/data/train_labels.csv',
-                         img_dir='rafdb/data/train', transform=transform)
-val_dataset = Four4All(csv_file='rafdb/data/valid_labels.csv',
-                       img_dir='rafdb/data/valid', transform=transform)
-test_dataset = Four4All(csv_file='rafdb/data/test_labels.csv',
-                        img_dir='rafdb/data/test', transform=transform)
+train_dataset = Four4All(csv_file='rafdb/train_labels.csv',
+                         img_dir='rafdb/train', transform=transform)
+val_dataset = Four4All(csv_file='rafdb/valid_labels.csv',
+                       img_dir='rafdb/valid', transform=transform)
+test_dataset = Four4All(csv_file='rafdb/test_labels.csv',
+                        img_dir='rafdb/test', transform=transform)
 
 train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
-class_names = train_dataset.class_names if hasattr(train_dataset, "class_names") \
-    else [str(i) for i in range(len(torch.unique(torch.tensor(train_dataset.labels))))]
+# Determine class names robustly from the dataset labels.
+# `Four4All.labels` is a pandas DataFrame (see `get_dataset.py`),
+# so avoid trying to convert the whole DataFrame to a torch tensor.
+if hasattr(train_dataset, "class_names"):
+    class_names = train_dataset.class_names
+else:
+    labels_attr = train_dataset.labels
+    # If labels_attr is a DataFrame, assume the label column is the second column
+    if isinstance(labels_attr, pd.DataFrame):
+        labels_array = labels_attr.iloc[:, 1].to_numpy()
+    elif isinstance(labels_attr, pd.Series):
+        labels_array = labels_attr.to_numpy()
+    else:
+        labels_array = np.array(labels_attr)
+
+    # Try to coerce to integers when possible (common for numeric labels)
+    try:
+        labels_array = labels_array.astype(int)
+    except Exception:
+        pass
+
+    unique_labels = np.unique(labels_array)
+    unique_sorted = np.sort(unique_labels)
+    class_names = [str(u) for u in unique_sorted]
 
 train_image, train_label = next(iter(train_loader))
 val_image, val_label = next(iter(val_loader))
@@ -71,7 +149,11 @@ model = ResEmoteNet().to(device)
 total_params = sum(p.numel() for p in model.parameters())
 print(f'{total_params:,} total parameters.')
 
-criterion = nn.CrossEntropyLoss()
+# Compute class weights from the training loader and create weighted loss
+num_classes = len(class_names)
+class_weights = compute_class_weights(train_loader, num_classes=num_classes, class_names=class_names)
+class_weights_tensor = torch.as_tensor(class_weights, dtype=torch.float32)
+criterion = nn.CrossEntropyLoss(weight=class_weights_tensor.to(device))
 optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=1e-4)
 
 patience = 15
