@@ -1,3 +1,4 @@
+from tkinter import font
 import torch
 import pandas as pd
 import numpy as np
@@ -205,7 +206,39 @@ def plot_training_curves(train_losses, val_losses, test_losses,
     print(f"Training curves saved to {save_path}")
 
 
-def plot_confusion_matrix_percent(y_true, y_pred, class_names, save_path="rafdb/confusion_matrix_percent.png"):
+def plot_confusion_matrix_percent(y_true, y_pred, class_names, acc, save_path="rafdb/confusion_matrix_percent.png"):
+    """Plot row-normalized confusion matrix in percent and include accuracy in title.
+
+    Parameters:
+    - y_true, y_pred: arrays of true and predicted labels
+    - class_names: ordered list of class label names
+    - save_path: path to save the PNG
+    - acc: optional accuracy (float in 0..1) to show in the title
+    """
+    cm = confusion_matrix(y_true, y_pred)
+    # Row-normalize to percentages (per true class)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        cm_percent = cm.astype('float') / cm.sum(axis=1, keepdims=True)
+    cm_percent = np.nan_to_num(cm_percent)
+
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(
+        cm_percent,
+        annot=True,
+        fmt=".2%",
+        cmap="Blues",
+        xticklabels=class_names,
+        yticklabels=class_names,
+        cbar_kws={'label': 'Percentage'}
+    )
+
+    plt.title(f"Test Confusion Matrix (%) - Accuracy: {acc*100:.2f}%")
+    plt.xlabel('Predicted Label', fontsize=12)
+    plt.ylabel('True Label', fontsize=12)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"\n✓ Confusion Matrix saved to {save_path}")
 
     # Confusion matrix
     cm = confusion_matrix(y_true, y_pred)
@@ -216,36 +249,13 @@ def plot_confusion_matrix_percent(y_true, y_pred, class_names, save_path="rafdb/
     sns.heatmap(cm_normalized, annot=True, fmt='.2%', cmap='Blues',
                 xticklabels=class_names, yticklabels=class_names,
                 cbar_kws={'label': 'Percentage'})
-    plt.title("Test Confusion Matrix (%)")
+    plt.title("Test Confusion Matrix (%)", fontsize=14, fontweight='bold')
     plt.xlabel('Predicted Label', fontsize=12)
     plt.ylabel('True Label', fontsize=12)
     plt.tight_layout()
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
     print(f"\n✓ Confusion matrix saved to {save_path}")
-
-
-    """Plot confusion matrix in percentages per row (true class)."""
-    cm = confusion_matrix(y_true, y_pred)  # [web:35][web:41]
-    cm_percent = cm.astype('float') / cm.sum(axis=1, keepdims=True)
-    cm_percent = np.nan_to_num(cm_percent)  # handle division by zero if any
-
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(
-        cm_percent,
-        annot=True,
-        fmt=".2%",
-        cmap="Blues",
-        xticklabels=class_names,
-        yticklabels=class_names
-    )
-    plt.xlabel("Predicted label")
-    plt.ylabel("True label")
-    plt.title("Confusion Matrix (row-normalized %)")
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close()
-    print(f"Confusion matrix (percent) saved to {save_path}")
 
 
     
@@ -387,7 +397,8 @@ def final_test_evaluation(model, test_loader, criterion, class_names):
 
     plot_confusion_matrix_percent(
         all_labels, all_preds, class_names,
-        save_path="rafdb/confusion_matrix_rafdb.png"
+        save_path="rafdb/confusion_matrix_rafdb.png",
+        acc=acc
     )
 
 
