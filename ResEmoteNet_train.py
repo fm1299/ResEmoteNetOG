@@ -240,23 +240,6 @@ def plot_confusion_matrix_percent(y_true, y_pred, class_names, acc, save_path="r
     plt.close()
     print(f"\n✓ Confusion Matrix saved to {save_path}")
 
-    # Confusion matrix
-    cm = confusion_matrix(y_true, y_pred)
-    cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-    
-    # Plot confusion matrix
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(cm_normalized, annot=True, fmt='.2%', cmap='Blues',
-                xticklabels=class_names, yticklabels=class_names,
-                cbar_kws={'label': 'Percentage'})
-    plt.title("Test Confusion Matrix (%)", fontsize=14, fontweight='bold')
-    plt.xlabel('Predicted Label', fontsize=12)
-    plt.ylabel('True Label', fontsize=12)
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close()
-    print(f"\n✓ Confusion matrix saved to {save_path}")
-
 
     
 
