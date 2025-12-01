@@ -109,30 +109,17 @@ train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
-# Determine class names robustly from the dataset labels.
-# `Four4All.labels` is a pandas DataFrame (see `get_dataset.py`),
-# so avoid trying to convert the whole DataFrame to a torch tensor.
-if hasattr(train_dataset, "class_names"):
-    class_names = train_dataset.class_names
-else:
-    labels_attr = train_dataset.labels
-    # If labels_attr is a DataFrame, assume the label column is the second column
-    if isinstance(labels_attr, pd.DataFrame):
-        labels_array = labels_attr.iloc[:, 1].to_numpy()
-    elif isinstance(labels_attr, pd.Series):
-        labels_array = labels_attr.to_numpy()
-    else:
-        labels_array = np.array(labels_attr)
-
-    # Try to coerce to integers when possible (common for numeric labels)
-    try:
-        labels_array = labels_array.astype(int)
-    except Exception:
-        pass
-
-    unique_labels = np.unique(labels_array)
-    unique_sorted = np.sort(unique_labels)
-    class_names = [str(u) for u in unique_sorted]
+# Use explicit class ordering for labels (CSV files follow this order)
+# This ensures plots and confusion matrices show meaningful names.
+class_names = [
+    "Angry",
+    "Disgust",
+    "Fear",
+    "Happy",
+    "Sad",
+    "Surprise",
+    "Neutral",
+]
 
 train_image, train_label = next(iter(train_loader))
 val_image, val_label = next(iter(val_loader))
